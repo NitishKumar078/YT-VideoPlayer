@@ -26,6 +26,36 @@ export function FullPlayer({ toggleFullscreen, isFullscreen }: FullPlayerProps) 
     const [showSkipForward, setShowSkipForward] = React.useState(false);
     const [showSkipBackward, setShowSkipBackward] = React.useState(false);
 
+    // Controls Visibility State
+    const [showControls, setShowControls] = React.useState(true);
+    const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    const resetControlsTimeout = () => {
+        setShowControls(true);
+        if (controlsTimeoutRef.current) {
+            clearTimeout(controlsTimeoutRef.current);
+        }
+        if (isFullscreen && isPlaying) {
+            controlsTimeoutRef.current = setTimeout(() => {
+                setShowControls(false);
+            }, 3000);
+        }
+    };
+
+    // Effect to handle auto-hide when playing state or fullscreen changes
+    React.useEffect(() => {
+        resetControlsTimeout();
+        return () => {
+            if (controlsTimeoutRef.current) {
+                clearTimeout(controlsTimeoutRef.current);
+            }
+        };
+    }, [isFullscreen, isPlaying]);
+
+    const handleUserInteraction = () => {
+        resetControlsTimeout();
+    };
+
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
         const secs = Math.floor(seconds % 60);
@@ -33,6 +63,7 @@ export function FullPlayer({ toggleFullscreen, isFullscreen }: FullPlayerProps) 
     };
 
     const handleVideoAreaClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        handleUserInteraction();
         const now = Date.now();
         const DOUBLE_TAP_DELAY = 300;
 
@@ -53,7 +84,7 @@ export function FullPlayer({ toggleFullscreen, isFullscreen }: FullPlayerProps) 
                 setShowSkipForward(true);
                 setTimeout(() => setShowSkipForward(false), 500);
             } else {
-                // Center double tap? Maybe toggle play/pause or maximize? 
+                // Center double tap? Maybe toggle play/pause or maximize?
                 // Standard behavior often implies toggle play/pause on single tap center.
                 togglePlay();
             }
@@ -61,10 +92,14 @@ export function FullPlayer({ toggleFullscreen, isFullscreen }: FullPlayerProps) 
         } else {
             lastTap.current = now;
             // Handle single tap logic if needed (e.g., toggle controls visibility)
+            if (isFullscreen) {
+                setShowControls(prev => !prev);
+            }
         }
     };
 
     const handleTouchStart = (e: React.TouchEvent) => {
+        handleUserInteraction();
         const scrollTop = infoRef.current?.scrollTop || 0;
         if (scrollTop <= 0) {
             touchStart.current = e.touches[0].clientY;
@@ -74,6 +109,7 @@ export function FullPlayer({ toggleFullscreen, isFullscreen }: FullPlayerProps) 
     };
 
     const handleTouchMove = (e: React.TouchEvent) => {
+        handleUserInteraction();
         if (touchStart.current === 0) return;
 
         const touchY = e.touches[0].clientY;
@@ -87,6 +123,7 @@ export function FullPlayer({ toggleFullscreen, isFullscreen }: FullPlayerProps) 
     };
 
     const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+        handleUserInteraction();
         const time = parseFloat(e.target.value);
         seekTo(time);
     };
@@ -94,9 +131,18 @@ export function FullPlayer({ toggleFullscreen, isFullscreen }: FullPlayerProps) 
     if (!currentVideo) return null;
 
     return (
-        <div className="flex-1 flex flex-col h-full bg-transparent relative">
+        <div
+            className="flex-1 flex flex-col h-full bg-transparent relative"
+            onMouseMove={handleUserInteraction}
+            onClick={handleUserInteraction}
+        >
             {/* Top Controls Overlay */}
-            <div className="absolute top-0 left-0 right-0 z-50 p-4 flex justify-between items-start pointer-events-none">
+            <div
+                className={cn(
+                    "absolute top-0 left-0 right-0 z-50 p-4 flex justify-between items-start pointer-events-none transition-opacity duration-300",
+                    !showControls && isFullscreen ? "opacity-0" : "opacity-100"
+                )}
+            >
                 <button
                     onClick={minimize}
                     className="pointer-events-auto w-10 h-10 flex items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md hover:bg-black/70 active:scale-95 transition-all"
@@ -133,8 +179,9 @@ export function FullPlayer({ toggleFullscreen, isFullscreen }: FullPlayerProps) 
             <div
                 ref={infoRef}
                 className={cn(
-                    "bg-transparent lg:mt-80 mt-[-10em] p-2 pb-20 flex-1 overflow-y-auto rounded-t-2xl  relative z-20 touch-pan-y shadow-[0_-4px_20px_rgba(0,0,0,0.5)]",
-                    isFullscreen && "fixed bottom-1 left-0 right-0 h-auto bg-transparent p-6 pb-8 flex-none rounded-none mt-0 overflow-visible shadow-none pointer-events-auto"
+                    "bg-transparent lg:mt-80 mt-[-10em] p-2 pb-20 flex-1 overflow-y-auto rounded-t-2xl relative z-20 touch-pan-y shadow-[0_-4px_20px_rgba(0,0,0,0.5)] transition-all duration-300",
+                    isFullscreen && "fixed bottom-0 left-0 right-0 h-auto bg-gradient-to-t from-black via-black/80 to-transparent p-6 pb-8 flex-none rounded-none mt-0 overflow-visible shadow-none pointer-events-auto",
+                    isFullscreen && !showControls ? "opacity-0 translate-y-4 pointer-events-none" : "opacity-100 translate-y-0"
                 )}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
@@ -162,8 +209,7 @@ export function FullPlayer({ toggleFullscreen, isFullscreen }: FullPlayerProps) 
 
                 <div className="flex justify-between items-start gap-4">
                     <div className="flex-1">
-                        <h1 className="text-xl font-bold text-white mb-1 line-clamp-2">{currentVideo.title}</h1>
-                        <p className="text-neutral-400 text-sm">Description goes here...</p>
+                        <h1 className="text-xl font-bold text-white mb-1 line-clamp-2 drop-shadow-lg shadow-black">{currentVideo.title}</h1>
                     </div>
                 </div>
 
